@@ -1,36 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:camera/camera.dart';
-
-import 'screens/camera_screen.dart';
-import 'models/face_detection_model.dart';
-import 'services/camera_service.dart';
-import 'services/face_detector_service.dart';
-import 'services/tensorflow_service.dart';
+import 'camera_page.dart';
+import 'face_detector_service.dart';
+import 'models/face_data.dart';
 
 void main() async {
-  // Ensure Flutter is initialized
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Get available cameras
-  final cameras = await availableCameras();
-  final firstCamera = cameras.first;
+  
+  // Set preferred orientations
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
 
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(
-          create: (_) => FaceDetectionModel(),
-        ),
-        Provider(
-          create: (_) => CameraService(camera: firstCamera),
-        ),
-        Provider(
-          create: (_) => FaceDetectorService(),
-        ),
-        Provider(
-          create: (_) => TensorFlowService(),
-        ),
+        ChangeNotifierProvider(create: (_) => FaceDataModel()),
       ],
       child: const MyApp(),
     ),
@@ -47,8 +34,9 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
         visualDensity: VisualDensity.adaptivePlatformDensity,
+        brightness: Brightness.dark,
       ),
-      home: const CameraScreen(),
+      home: const CameraPage(),
       debugShowCheckedModeBanner: false,
     );
   }
