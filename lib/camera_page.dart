@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:google_ml_kit/google_ml_kit.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:face_condition_detector/models/facial_condition.dart';
-import 'package:face_condition_detector/widgets/camera_view.dart';
-import 'package:face_condition_detector/widgets/face_overlay.dart';
-import 'package:face_condition_detector/widgets/condition_display.dart';
-import 'package:face_condition_detector/services/face_detector_service.dart';
-import 'package:face_condition_detector/utils/lighting_analyzer.dart';
+import 'models/facial_condition.dart';
+import 'widgets/camera_view.dart';
+import 'widgets/face_overlay.dart';
+import 'widgets/condition_display.dart';
+import 'services/face_detector_service.dart';
+import 'utils/lighting_analyzer.dart';
 import 'package:flutter/foundation.dart';
 
 class CameraPage extends StatefulWidget {
@@ -79,39 +79,79 @@ class _CameraPageState extends State<CameraPage> {
   
   void _processImage(CameraImage image) async {
     if (mounted) {
-      // Process lighting
-      final lighting = await lightingAnalyzer!.analyzeLighting(image);
-      
-      // Process face detection using ML Kit
-      final faces = await faceDetectorService!.detectFaces(image, cameraController!.description);
-      
-      // If ML Kit cannot process the image (web, compatibility issues), use mock detection
-      _useMockFace = kIsWeb || (faces == null || faces.isEmpty);
-      
-      // Process emotion when face is detected
-      FacialCondition? condition;
-      bool faceDetected = false;
-      
-      if (!_useMockFace && faces != null && faces.isNotEmpty) {
-        // Real ML Kit detection worked
-        condition = await faceDetectorService!.detectEmotion(faces.first);
-        faceDetected = true;
-      } else {
-        // Use mock face detection for web or fallback
-        final mockFace = await faceDetectorService!.getSimulatedFace(image);
-        if (mockFace != null) {
-          condition = await faceDetectorService!.detectEmotionForMock(mockFace);
+      try {
+        // Process lighting
+        final lighting = await lightingAnalyzer!.analyzeLighting(image);
+        
+        // Process face detection using ML Kit
+        final faces = await faceDetectorService!.detectFaces(image, cameraController!.description);
+        
+        // If ML Kit cannot process the image (web, compatibility issues), use mock detection
+        _useMockFace = kIsWeb || (faces == null || faces.isEmpty);
+        
+        // Process emotion when face is detected
+        FacialCondition? condition;
+        bool faceDetected = false;
+        
+        // Get lighting quality from analyzer for detection accuracy
+        final double lightingQualityValue = lightingAnalyzer!.getLightingQuality(lighting);
+        
+        if (!_useMockFace && faces != null && faces.isNotEmpty) {
+          // Real ML Kit detection worked
+          condition = await faceDetectorService!.detectEmotion(faces.first, lightingQualityValue);
           faceDetected = true;
-          _mockFace = mockFace;
+        } else {
+          // Use mock face detection for web or fallback
+          final mockFace = await faceDetectorService!.getSimulatedFace(image);
+          if (mockFace != null) {
+            condition = await faceDetectorService!.detectEmotionForMock(mockFace, lightingQualityValue);
+            faceDetected = true;
+            _mockFace = mockFace;
+          }
         }
+        
+        // Consider lighting conditions in face detection
+        // If lighting is too dark or too bright and face detection isn't reliable,
+        // we can adjust our confidence or make recommendations
+        if (lighting == "Too Dark" || lighting == "Too Bright") {
+          // Lower confidence in detection under bad lighting
+          if (condition != null && faceDetected) {
+            // Get lighting quality factor (0-1)
+            final double lightingQuality = lightingAnalyzer!.getLightingQuality(lighting);
+            
+            // Adjust confidence based on lighting quality
+            // Worse lighting = lower confidence in detection
+            final adjustedConfidence = condition.confidence * (0.3 + (0.7 * lightingQuality));
+            
+            // If confidence is too low in bad lighting, we might prioritize tiredness
+            // as it's often more noticeable in poor lighting
+            
+            if (adjustedConfidence < 0.5 && lighting == "Too Dark") {
+              condition = FacialCondition(
+                emotion: EmotionType.tired,
+                confidence: 0.6, // Moderate confidence in tiredness detection
+                lightingQuality: lightingQualityValue,
+              );
+            } else {
+              condition = FacialCondition(
+                emotion: condition.emotion,
+                confidence: adjustedConfidence,
+                lightingQuality: lightingQualityValue,
+              );
+            }
+          }
+        }
+        
+        setState(() {
+          _faces = faces;
+          _faceDetected = faceDetected;
+          _currentCondition = condition;
+          _lightingCondition = lighting;
+        });
+      } catch (e) {
+        print('Error processing image: $e');
+        // Don't update state on error to preserve last good detection
       }
-      
-      setState(() {
-        _faces = faces;
-        _faceDetected = faceDetected;
-        _currentCondition = condition;
-        _lightingCondition = lighting;
-      });
     }
   }
   

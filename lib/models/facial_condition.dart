@@ -13,10 +13,12 @@ enum EmotionType {
 class FacialCondition {
   final EmotionType emotion;
   final double confidence;
+  final double lightingQuality;
   
   FacialCondition({
     required this.emotion,
     required this.confidence,
+    this.lightingQuality = 0.9, // Default to good lighting
   });
   
   String get emotionName {
@@ -72,25 +74,53 @@ class FacialCondition {
   String get recommendation {
     switch (emotion) {
       case EmotionType.happy:
-        return 'Keep enjoying your day!';
+        return 'Keep enjoying your day! Your positive mood is great for productivity.';
       case EmotionType.sad:
-        return 'Take a moment for self-care or talk to someone.';
+        return 'Take a moment for self-care or talk to someone. A short walk might help improve your mood.';
       case EmotionType.angry:
-        return 'Take a few deep breaths to calm down.';
+        return 'Take a few deep breaths to calm down. Consider a brief break from screens.';
       case EmotionType.surprised:
-        return 'Take a moment to process what surprised you.';
+        return 'Take a moment to process what surprised you. Return to normal activities when ready.';
       case EmotionType.fearful:
-        return 'Practice some calming breathing exercises.';
+        return 'Practice some calming breathing exercises. Try counting to 10 slowly while breathing deeply.';
       case EmotionType.disgusted:
-        return 'Try to move away from what\'s causing your discomfort.';
+        return 'Try to move away from what\'s causing your discomfort. A change of environment might help.';
       case EmotionType.neutral:
-        return 'You\'re balanced. Continue your activities.';
+        return 'You\'re balanced. Continue your activities as normal.';
       case EmotionType.tired:
-        return 'Consider taking a short break or nap if possible.';
+        return 'You appear fatigued. Consider taking a 15-minute break, a short walk, or having a healthy snack to boost your energy.';
       case EmotionType.stressed:
-        return 'Try some stress-reduction techniques like deep breathing.';
+        return 'Your stress levels seem elevated. Try a 2-minute breathing exercise or step away from your current task briefly.';
       default:
         return 'Unable to provide a recommendation.';
+    }
+  }
+  
+  // Get a more detailed analysis based on confidence level
+  String getDetailedAnalysis([double? externalLightingQuality]) {
+    // Use provided lighting quality or the internal one
+    final double effectiveLightingQuality = externalLightingQuality ?? lightingQuality;
+    
+    // Adjust analysis based on lighting quality
+    String lightingNote = "";
+    if (effectiveLightingQuality < 0.6) {
+      lightingNote = " Note: Detection accuracy may be affected by current lighting conditions.";
+    }
+    
+    // Base analysis on emotion and confidence
+    if (confidence > 0.8) {
+      switch (emotion) {
+        case EmotionType.tired:
+          return "High confidence that you're experiencing fatigue. Physical signs like drooping eyelids and reduced facial movement detected.$lightingNote";
+        case EmotionType.stressed:
+          return "Strong indicators of stress detected in your facial expressions, particularly around your eyes and mouth.$lightingNote";
+        default:
+          return "High confidence in the detected emotional state.$lightingNote";
+      }
+    } else if (confidence > 0.5) {
+      return "Moderate confidence in the detected emotional state.$lightingNote";
+    } else {
+      return "Low confidence in the detected emotional state. Try improving lighting or positioning your face more clearly in frame.$lightingNote";
     }
   }
 }

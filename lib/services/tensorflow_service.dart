@@ -1,24 +1,28 @@
+import 'dart:async';
+import 'dart:math' as math;
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_ml_kit/google_ml_kit.dart';
-import 'dart:math' as math;
+import 'package:tflite/tflite.dart';
 
 import '../models/facial_condition.dart';
 import '../utils/image_converter.dart';
 import '../utils/lighting_analyzer.dart';
 
-// Conditional import for tflite_flutter
-// We don't import it directly because it causes issues on web
-// Instead we'll handle it gracefully
-
 class TensorFlowService {
-  dynamic _emotionModel; // Using dynamic to avoid direct typing to Interpreter
   bool _isInitialized = false;
+  LightingAnalyzer? _lightingAnalyzer;
   
   // Results of the latest processing
   Map<EmotionType, double> _emotionData = {};
   double _tirednessScore = 0.0;
   double _stressScore = 0.0;
+
+  // List of emotion labels that match the model output
+  final List<String> _emotionLabels = [
+    'angry', 'disgusted', 'fearful', 'happy', 
+    'neutral', 'sad', 'surprised', 'tired', 'stressed'
+  ];
 
   // Getters
   bool get isInitialized => _isInitialized;
@@ -27,12 +31,24 @@ class TensorFlowService {
   double get stressScore => _stressScore;
 
   Future<void> initialize() async {
-    // We'll use a web-friendly approach that skips TFLite
-    _isInitialized = true;
-    
-    // We could conditionally load the TFLite model for non-web platforms
-    // But for simplicity, we'll use the same approach everywhere initially
-    print('TensorFlow service initialized with web-friendly approach');
+    try {
+      // Initialize TFLite
+      await Tflite.loadModel(
+        model: 'assets/models/emotion_model.tflite',
+        labels: 'assets/models/emotion_labels.txt',
+        numThreads: 1,
+        isAsset: true,
+        useGpuDelegate: false,
+      );
+      
+      _isInitialized = true;
+      print('TensorFlow model loaded successfully');
+    } catch (e) {
+      print('Error initializing TensorFlow model: $e');
+      print('Falling back to simulated predictions');
+      // Even if model loading fails, we'll proceed with simulated data
+      _isInitialized = true;
+    }
     return;
   }
 
@@ -43,24 +59,75 @@ class TensorFlowService {
     }
 
     try {
-      // Generate simulated predictions for emotions
-      _simulatePredictions();
+      bool useTFLite = false;
+      
+      if (!kIsWeb && !useTFLite) {
+        // Try to use TFLite for native platforms
+        try {
+          final List? recognitions = await Tflite.runModelOnFrame(
+            bytesList: image.planes.map((plane) => plane.bytes).toList(),
+            imageHeight: image.height,
+            imageWidth: image.width,
+            imageMean: 127.5,
+            imageStd: 127.5,
+            rotation: 90,
+            numResults: 9,
+            threshold: 0.1,
+            asynch: true,
+          );
+          
+          if (recognitions != null && recognitions.isNotEmpty) {
+            _parseEmotionResults(recognitions);
+            useTFLite = true;
+          }
+        } catch (e) {
+          print('TFLite processing error: $e');
+        }
+      }
+      
+      // Fall back to simulated predictions if TFLite wasn't used
+      if (!useTFLite) {
+        _simulatePredictions();
+      }
 
       // Calculate tiredness and stress based on face landmarks and emotion
       _calculateTirednessAndStress(face);
     } catch (e) {
       print('Error processing image in TensorFlow service: $e');
       // Reset results
-      _emotionData = {
-        for (var emotion in EmotionType.values) emotion: 0.0
-      };
-      _emotionData[EmotionType.neutral] = 1.0;
-      _tirednessScore = 0.0;
-      _stressScore = 0.0;
+      _resetEmotionData();
     }
   }
+  
+  void _parseEmotionResults(List recognitions) {
+    // Reset emotion data
+    _resetEmotionData();
+    
+    try {
+      for (var recognition in recognitions) {
+        String label = recognition['label'];
+        double confidence = recognition['confidence'];
+        
+        // Map the label to EmotionType
+        int labelIndex = _emotionLabels.indexOf(label);
+        if (labelIndex >= 0 && labelIndex < EmotionType.values.length) {
+          EmotionType emotion = EmotionType.values[labelIndex];
+          _emotionData[emotion] = confidence;
+        }
+      }
+    } catch (e) {
+      print('Error parsing emotion results: $e');
+    }
+  }
+  
+  void _resetEmotionData() {
+    _emotionData = {
+      for (var emotion in EmotionType.values) emotion: 0.0
+    };
+    _emotionData[EmotionType.neutral] = 1.0; // Default to neutral
+  }
 
-  // For simulating emotion predictions
+  // For simulating emotion predictions when TFLite isn't available
   void _simulatePredictions() {
     // Reset emotion data
     _emotionData = {
@@ -68,7 +135,6 @@ class TensorFlowService {
     };
     
     // Assign values based on commonly observed patterns
-    // This is a simplified simulation - a real model would be more accurate
     _emotionData[EmotionType.happy] = 0.3;
     _emotionData[EmotionType.neutral] = 0.4;
     _emotionData[EmotionType.tired] = 0.15;
@@ -123,12 +189,42 @@ class TensorFlowService {
     _stressScore = math.min(1.0, stressFromEmotion);
   }
 
+  // Get the dominant emotion
+  EmotionType getDominantEmotion() {
+    EmotionType dominant = EmotionType.neutral;
+    double maxConfidence = 0.0;
+    
+    _emotionData.forEach((emotion, confidence) {
+      if (confidence > maxConfidence) {
+        maxConfidence = confidence;
+        dominant = emotion;
+      }
+    });
+    
+    return dominant;
+  }
+  
   // Analyze lighting conditions from the camera image
-  LightingCondition getLightingCondition(CameraImage image) {
-    return LightingAnalyzer.analyzeLighting(image);
+  Future<String> getLightingCondition(CameraImage image) async {
+    try {
+      if (_lightingAnalyzer == null) {
+        _lightingAnalyzer = LightingAnalyzer();
+      }
+      // We'll use the LightingAnalyzer utility class
+      return await _lightingAnalyzer!.analyzeLighting(image);
+    } catch (e) {
+      print('Error getting lighting condition: $e');
+      return "Normal";
+    }
   }
 
   void dispose() async {
+    try {
+      await Tflite.close();
+    } catch (e) {
+      print('Error closing TFLite model: $e');
+    }
+    
     _isInitialized = false;
     _emotionData = {};
     _tirednessScore = 0.0;

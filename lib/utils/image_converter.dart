@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:google_ml_kit/google_ml_kit.dart';
 import 'package:flutter/foundation.dart';
+import 'dart:async';
 
 class ImageConverter {
   // Convert CameraImage to InputImage for processing with ML Kit
@@ -11,23 +12,29 @@ class ImageConverter {
     }
 
     try {
-      // For google_ml_kit 0.7.3, we need to handle the different platform implementations 
+      // For google_ml_kit 0.7.3, we need to handle the different platform implementations
       
-      // Web doesn't support camera directly in this version, so we'll focus on mobile
       if (kIsWeb) {
-        // In web, we have limited functionality with ML Kit 0.7.3
+        // Web platform support is limited in this version of ML Kit
         print('Warning: Face detection is limited on web platform with this version.');
-        
-        // Alternative: Use fromFilePath with a static image
         return null;
       } else {
-        // For Android/iOS, we can use the fromFilePath method with a sample image
-        // This is for demonstration purposes
-        // In a real app with 0.7.3, we'd need to save the camera image to a file first
-        return null;
+        // For Android/iOS, we should try to use the image data properly
+        // Note: In ML Kit 0.7.3, we have limited options for image conversion
+        // This approach doesn't work well with 0.7.3, but we'll keep the code structure for future upgrades
+        
+        try {
+          // Try to convert to InputImage from file path in mobile
+          // Note: This doesn't actually work with camera feed in real-time
+          // It's just a placeholder for the structure
+          return null;
+        } catch (e) {
+          print('Error converting camera image: $e');
+          return null;
+        }
       }
     } catch (e) {
-      print('Error converting camera image: $e');
+      print('Error in image converter: $e');
       return null;
     }
   }

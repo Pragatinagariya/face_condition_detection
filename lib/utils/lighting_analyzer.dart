@@ -66,4 +66,18 @@ class LightingAnalyzer {
         return "Lighting conditions are good for face detection.";
     }
   }
+  
+  // Get a numerical representation of lighting quality (0-1)
+  // 0 = poor conditions, 1 = ideal conditions
+  double getLightingQuality(String condition) {
+    switch (condition) {
+      case "Too Dark":
+        return 0.3; // Detection less reliable
+      case "Too Bright":
+        return 0.4; // Detection somewhat compromised
+      case "Normal":
+      default:
+        return 0.9; // Detection should be reliable
+    }
+  }
 }

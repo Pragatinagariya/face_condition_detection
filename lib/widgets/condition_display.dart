@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:face_condition_detector/models/facial_condition.dart';
-import 'package:face_condition_detector/utils/lighting_analyzer.dart';
+import '../models/facial_condition.dart';
+import '../utils/lighting_analyzer.dart';
 
 class ConditionDisplay extends StatelessWidget {
   final FacialCondition? facialCondition;
   final String lightingCondition;
   final bool faceDetected;
+  final LightingAnalyzer _lightingAnalyzer = LightingAnalyzer();
   
-  const ConditionDisplay({
+  ConditionDisplay({
     Key? key,
     required this.facialCondition,
     required this.lightingCondition,
@@ -64,20 +65,37 @@ class ConditionDisplay extends StatelessWidget {
           const SizedBox(height: 4.0),
           
           // Lighting condition
-          Row(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                _getLightingIcon(lightingCondition),
-                color: _getLightingColor(lightingCondition),
+              Row(
+                children: [
+                  Icon(
+                    _getLightingIcon(lightingCondition),
+                    color: _getLightingColor(lightingCondition),
+                  ),
+                  const SizedBox(width: 8.0),
+                  Text(
+                    "Lighting: $lightingCondition",
+                    style: TextStyle(
+                      color: _getLightingColor(lightingCondition),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 8.0),
-              Text(
-                "Lighting: $lightingCondition",
-                style: TextStyle(
-                  color: _getLightingColor(lightingCondition),
-                  fontWeight: FontWeight.w500,
+              if (lightingCondition != "Normal")
+                Padding(
+                  padding: const EdgeInsets.only(left: 32.0, top: 4.0),
+                  child: Text(
+                    _lightingAnalyzer.getLightingRecommendation(lightingCondition),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontStyle: FontStyle.italic,
+                      color: _getLightingColor(lightingCondition),
+                    ),
+                  ),
                 ),
-              ),
             ],
           ),
           
@@ -88,12 +106,22 @@ class ConditionDisplay extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  "Emotional State: ${facialCondition!.emotionName}",
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
+                Row(
+                  children: [
+                    Icon(
+                      _getEmotionIcon(facialCondition!.emotion),
+                      size: 22,
+                      color: _getEmotionColor(facialCondition!.emotion),
+                    ),
+                    const SizedBox(width: 8.0),
+                    Text(
+                      "Emotional State: ${facialCondition!.emotionName}",
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 4.0),
                 Text(
@@ -101,11 +129,30 @@ class ConditionDisplay extends StatelessWidget {
                   style: const TextStyle(fontSize: 14),
                 ),
                 const SizedBox(height: 4.0),
+                // Detailed analysis based on lighting quality
                 Text(
-                  "Recommendation: ${facialCondition!.recommendation}",
+                  facialCondition!.getDetailedAnalysis(),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 8.0),
+                Text(
+                  "Recommendation:",
                   style: const TextStyle(
                     fontSize: 14,
-                    fontStyle: FontStyle.italic,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(left: 8.0, top: 2.0),
+                  child: Text(
+                    facialCondition!.recommendation,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontStyle: FontStyle.italic,
+                    ),
                   ),
                 ),
               ],

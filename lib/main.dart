@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-import 'package:face_condition_detector/camera_page.dart';
+import 'camera_page.dart';
 
 List<CameraDescription> cameras = [];
 

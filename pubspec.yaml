@@ -20,6 +20,7 @@ dependencies:
   permission_handler: ^10.3.0
   path_provider: ^2.0.15
   cupertino_icons: ^1.0.2
+  tflite: ^1.1.2
 
 dev_dependencies:
   flutter_test:
