@@ -1,57 +1,68 @@
 import 'package:flutter/foundation.dart';
 import 'package:google_ml_kit/google_ml_kit.dart';
-import '../models/facial_condition.dart';
+import 'facial_condition.dart';
 
 class FaceDetectionModel extends ChangeNotifier {
-  Face? _face;
-  FacialCondition? _facialCondition;
-  bool _isProcessing = false;
-  String _lightingCondition = "Normal";
-  double _lightingIntensity = 0.0; // Range: -1.0 (too dim) to 1.0 (too bright)
   bool _faceDetected = false;
+  bool _isProcessing = false;
+  FacialCondition? _facialCondition;
 
   // Getters
-  Face? get face => _face;
-  FacialCondition? get facialCondition => _facialCondition;
-  bool get isProcessing => _isProcessing;
-  String get lightingCondition => _lightingCondition;
-  double get lightingIntensity => _lightingIntensity;
   bool get faceDetected => _faceDetected;
+  bool get isProcessing => _isProcessing;
+  FacialCondition? get facialCondition => _facialCondition;
 
-  // Update face detection results
-  void updateFace(Face? face) {
-    _face = face;
-    _faceDetected = face != null;
+  // Setters
+  set faceDetected(bool value) {
+    if (_faceDetected != value) {
+      _faceDetected = value;
+      notifyListeners();
+    }
+  }
+
+  set isProcessing(bool value) {
+    if (_isProcessing != value) {
+      _isProcessing = value;
+      notifyListeners();
+    }
+  }
+
+  void updateFacialCondition({
+    required Face faceData,
+    required Map<EmotionType, double> emotionData,
+    required double tiredness,
+    required double stress,
+    required LightingCondition lightingCondition,
+  }) {
+    // Find the dominant emotion
+    EmotionType dominantEmotion = EmotionType.neutral;
+    double maxScore = 0;
+    
+    emotionData.forEach((emotion, score) {
+      if (score > maxScore) {
+        maxScore = score;
+        dominantEmotion = emotion;
+      }
+    });
+
+    // Create a new facial condition object
+    _facialCondition = FacialCondition(
+      faceId: faceData.trackingId ?? 0,
+      emotion: dominantEmotion,
+      emotionConfidence: maxScore,
+      tiredness: tiredness,
+      stress: stress,
+      lightingCondition: lightingCondition,
+      timestamp: DateTime.now(),
+    );
+
     notifyListeners();
   }
 
-  // Update facial condition analysis
-  void updateFacialCondition(FacialCondition condition) {
-    _facialCondition = condition;
-    notifyListeners();
-  }
-
-  // Update lighting condition
-  void updateLightingCondition(String condition, double intensity) {
-    _lightingCondition = condition;
-    _lightingIntensity = intensity;
-    notifyListeners();
-  }
-
-  // Set processing state
-  void setProcessing(bool isProcessing) {
-    _isProcessing = isProcessing;
-    notifyListeners();
-  }
-
-  // Reset all data
   void reset() {
-    _face = null;
-    _facialCondition = null;
-    _isProcessing = false;
-    _lightingCondition = "Normal";
-    _lightingIntensity = 0.0;
     _faceDetected = false;
+    _isProcessing = false;
+    _facialCondition = null;
     notifyListeners();
   }
 }

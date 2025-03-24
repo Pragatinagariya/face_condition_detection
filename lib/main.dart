@@ -1,27 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
-import 'camera_page.dart';
-import 'face_detector_service.dart';
-import 'models/face_data.dart';
+import 'package:camera/camera.dart';
+import 'package:face_condition_detector/camera_page.dart';
 
-void main() async {
+List<CameraDescription> cameras = [];
+
+Future<void> main() async {
+  // Ensure that plugin services are initialized
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Set preferred orientations
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
-
-  runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => FaceDataModel()),
-      ],
-      child: const MyApp(),
-    ),
-  );
+  // Get available cameras
+  try {
+    cameras = await availableCameras();
+  } on CameraException catch (e) {
+    print('Error initializing cameras: $e');
+  }
+  
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -34,10 +28,30 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
         visualDensity: VisualDensity.adaptivePlatformDensity,
-        brightness: Brightness.dark,
       ),
-      home: const CameraPage(),
-      debugShowCheckedModeBanner: false,
+      home: cameras.isEmpty 
+          ? const NoCameraScreen() 
+          : CameraPage(cameras: cameras),
+    );
+  }
+}
+
+class NoCameraScreen extends StatelessWidget {
+  const NoCameraScreen({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Camera Error'),
+      ),
+      body: const Center(
+        child: Text(
+          'No cameras available. Please check camera permissions.',
+          style: TextStyle(fontSize: 18),
+          textAlign: TextAlign.center,
+        ),
+      ),
     );
   }
 }

@@ -1,103 +1,136 @@
-import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+typedef CameraImageCallback = Function(CameraImage image);
+
 class CameraService {
-  final CameraDescription camera;
   CameraController? _controller;
-  bool _isProcessingFrame = false;
+  CameraDescription _camera;
+  CameraImageCallback? _imageStreamCallback;
+  Size? _previewSize;
+  bool _isDisposed = false;
 
-  CameraService({required this.camera});
+  CameraService({required CameraDescription camera}) : _camera = camera;
 
-  bool get isInitialized => _controller?.value.isInitialized ?? false;
   CameraController? get controller => _controller;
-  
+  CameraDescription get cameraDescription => _camera;
+  Size get previewSize => _previewSize ?? const Size(640, 480);
+  bool get isInitialized => _controller?.value.isInitialized ?? false;
+
   Future<void> initialize() async {
     if (_controller != null) {
       await _controller!.dispose();
     }
 
-    // Initialize the camera with the highest resolution and enable face detection
     _controller = CameraController(
-      camera,
-      ResolutionPreset.high,
+      _camera,
+      kIsWeb ? ResolutionPreset.medium : ResolutionPreset.high,
       enableAudio: false,
-      imageFormatGroup: Platform.isAndroid 
-          ? ImageFormatGroup.yuv420 
-          : ImageFormatGroup.bgra8888,
     );
 
     try {
       await _controller!.initialize();
-      await _controller!.setFocusMode(FocusMode.auto);
-      await _controller!.setExposureMode(ExposureMode.auto);
+      _previewSize = Size(
+        _controller!.value.previewSize!.height,
+        _controller!.value.previewSize!.width,
+      );
+      _isDisposed = false;
     } catch (e) {
       print('Error initializing camera: $e');
       rethrow;
     }
   }
 
-  Future<CameraImage?> takePicture() async {
-    if (!isInitialized || _isProcessingFrame) {
-      return null;
+  void startImageStream(CameraImageCallback callback) {
+    if (_controller == null || !_controller!.value.isInitialized) {
+      print('Camera controller not initialized');
+      return;
     }
 
-    _isProcessingFrame = true;
-    CameraImage? image;
+    _imageStreamCallback = callback;
     
     try {
-      image = await _controller!.startImageStream((CameraImage img) {
-        _controller!.stopImageStream();
-      }).timeout(const Duration(seconds: 2));
+      // Using listen instead of startImageStream to fix the error
+      _controller!.startImageStream((CameraImage image) {
+        if (_imageStreamCallback != null) {
+          _imageStreamCallback!(image);
+        }
+      });
     } catch (e) {
-      print('Error taking camera image: $e');
-    } finally {
-      _isProcessingFrame = false;
-    }
-
-    return image;
-  }
-
-  Future<void> dispose() async {
-    await _controller?.dispose();
-    _controller = null;
-  }
-
-  Future<void> pausePreview() async {
-    if (isInitialized) {
-      await _controller!.pausePreview();
+      print('Error starting image stream: $e');
     }
   }
 
-  Future<void> resumePreview() async {
-    if (isInitialized) {
-      await _controller!.resumePreview();
+  void stopImageStream() {
+    if (_controller == null || !_controller!.value.isInitialized) {
+      return;
     }
-  }
-
-  // Adjust camera settings for different lighting conditions
-  Future<void> adjustForLighting(double lightingIntensity) async {
-    if (!isInitialized) return;
 
     try {
-      // For bright environments (positive intensity)
-      if (lightingIntensity > 0.3) {
-        // Reduce exposure
-        await _controller!.setExposureOffset(-1.0 * lightingIntensity);
-      } 
-      // For dim environments (negative intensity)
-      else if (lightingIntensity < -0.3) {
-        // Increase exposure
-        await _controller!.setExposureOffset(-2.0 * lightingIntensity);
+      _controller!.stopImageStream();
+    } catch (e) {
+      print('Error stopping image stream: $e');
+    }
+  }
+
+  Future<void> switchCamera() async {
+    if (_controller == null || !_controller!.value.isInitialized) {
+      return;
+    }
+
+    try {
+      final cameras = await availableCameras();
+      CameraDescription newCamera;
+      
+      // Switch between front and back cameras
+      if (_camera.lensDirection == CameraLensDirection.front) {
+        newCamera = cameras.firstWhere(
+          (camera) => camera.lensDirection == CameraLensDirection.back,
+          orElse: () => cameras.first,
+        );
+      } else {
+        newCamera = cameras.firstWhere(
+          (camera) => camera.lensDirection == CameraLensDirection.front,
+          orElse: () => cameras.first,
+        );
       }
-      // For normal lighting
-      else {
-        // Reset to auto exposure
-        await _controller!.setExposureOffset(0.0);
+      
+      if (newCamera != _camera) {
+        _camera = newCamera;
+        
+        // Save the callback before re-initialization
+        final savedCallback = _imageStreamCallback;
+        
+        // Re-initialize with the new camera
+        await initialize();
+        
+        // Re-start the image stream if it was running before
+        if (savedCallback != null) {
+          startImageStream(savedCallback);
+        }
       }
     } catch (e) {
-      print('Error adjusting camera for lighting: $e');
+      print('Error switching camera: $e');
+    }
+  }
+
+  void dispose() async {
+    if (_isDisposed) {
+      return;
+    }
+    _isDisposed = true;
+    
+    try {
+      if (_controller != null) {
+        if (_controller!.value.isStreamingImages) {
+          await _controller!.stopImageStream();
+        }
+        await _controller!.dispose();
+        _controller = null;
+      }
+    } catch (e) {
+      print('Error disposing camera: $e');
     }
   }
 }

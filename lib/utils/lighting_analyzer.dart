@@ -2,98 +2,68 @@ import 'package:camera/camera.dart';
 import 'dart:math';
 
 class LightingAnalyzer {
-  // Constants for lighting thresholds
-  static const double _dimThreshold = 70.0;
+  // Constants for lighting conditions
+  static const double _darkThreshold = 50.0;
   static const double _brightThreshold = 200.0;
   
-  // Analyze the lighting conditions from a camera image
-  static Map<String, dynamic> analyzeLighting(CameraImage image) {
+  // Returns the current lighting condition: "Too Dark", "Normal", or "Too Bright"
+  Future<String> analyzeLighting(CameraImage image) async {
     try {
-      // Calculate the average brightness
-      final brightness = _calculateAverageBrightness(image);
+      final double brightness = _calculateBrightness(image);
       
-      // Determine lighting condition
-      String condition;
-      double intensity;
-      
-      if (brightness < _dimThreshold) {
-        condition = "Too Dim";
-        // Normalize intensity to range [-1.0, 0.0]
-        intensity = -1.0 + (brightness / _dimThreshold);
+      if (brightness < _darkThreshold) {
+        return "Too Dark";
       } else if (brightness > _brightThreshold) {
-        condition = "Too Bright";
-        // Normalize intensity to range [0.0, 1.0]
-        intensity = (brightness - _brightThreshold) / (255.0 - _brightThreshold);
-        intensity = min(intensity, 1.0);
+        return "Too Bright";
       } else {
-        condition = "Normal";
-        // Normalize to range [-0.3, 0.3] for normal conditions
-        intensity = (2.0 * (brightness - _dimThreshold) / (_brightThreshold - _dimThreshold)) - 1.0;
-        intensity *= 0.3;
+        return "Normal";
       }
-      
-      return {
-        "condition": condition,
-        "intensity": intensity,
-        "brightness": brightness,
-      };
     } catch (e) {
       print('Error analyzing lighting: $e');
-      return {
-        "condition": "Unknown",
-        "intensity": 0.0,
-        "brightness": 0.0,
-      };
+      return "Normal"; // Default to normal if there's an error
     }
   }
-
+  
   // Calculate the average brightness of the image
-  static double _calculateAverageBrightness(CameraImage image) {
-    // Different calculation based on the image format
+  double _calculateBrightness(CameraImage image) {
+    // For YUV_420 format commonly used by cameras
     if (image.format.group == ImageFormatGroup.yuv420) {
-      // For YUV format, the Y plane represents the brightness
-      final yPlane = image.planes[0];
-      final bytes = yPlane.bytes;
+      // Y plane contains the brightness information (luma)
+      final Plane yPlane = image.planes[0];
+      final int width = image.width;
+      final int height = image.height;
       
-      // Sample the brightness values
-      double total = 0;
-      final sampleSize = min(1000, bytes.length);
-      final step = bytes.length ~/ sampleSize;
+      // Sample a subset of pixels for efficiency
+      final int samplingRate = 16; // Sample every 16th pixel
+      int totalSamples = 0;
+      double totalBrightness = 0;
       
-      for (int i = 0; i < bytes.length; i += step) {
-        total += bytes[i];
-      }
-      
-      return total / (bytes.length ~/ step);
-    } else if (image.format.group == ImageFormatGroup.bgra8888) {
-      // For BGRA format, calculate from RGB values
-      final plane = image.planes[0];
-      final bytes = plane.bytes;
-      
-      double total = 0;
-      int count = 0;
-      
-      // Sample the pixels
-      final sampleSize = min(1000, bytes.length ~/ 4);
-      final step = (bytes.length ~/ 4) ~/ sampleSize;
-      
-      for (int i = 0; i < bytes.length; i += step * 4) {
-        if (i + 2 < bytes.length) {
-          // Calculate brightness from RGB
-          final r = bytes[i + 2];
-          final g = bytes[i + 1];
-          final b = bytes[i];
-          
-          // Weighted brightness formula
-          final brightness = (0.299 * r + 0.587 * g + 0.114 * b);
-          total += brightness;
-          count++;
+      for (int y = 0; y < height; y += samplingRate) {
+        for (int x = 0; x < width; x += samplingRate) {
+          final int pixel = yPlane.bytes[y * yPlane.bytesPerRow + x];
+          totalBrightness += pixel;
+          totalSamples++;
         }
       }
       
-      return count > 0 ? total / count : 0;
+      return totalBrightness / max(1, totalSamples);
+    } else {
+      // For other formats, we could implement more complex brightness calculation
+      // For now, just return a middle value
+      return 125.0;
     }
-    
-    return 0;
+  }
+  
+  // Get recommendation based on lighting condition
+  String getLightingRecommendation(String condition) {
+    switch (condition) {
+      case "Too Dark":
+        return "Environment is too dark. Try moving to a better lit area or turn on some lights.";
+      case "Too Bright":
+        return "Environment is too bright. Try reducing direct light or moving to a more shaded area.";
+      case "Normal":
+      default:
+        return "Lighting conditions are good for face detection.";
+    }
   }
 }

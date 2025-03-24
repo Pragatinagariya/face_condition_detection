@@ -50,3 +50,11 @@ args = "flutter run -d web-server --web-port 8000 --web-hostname 0.0.0.0"
 
 [deployment]
 run = ["sh", "-c", "flutter pub get && flutter run -d web-server --web-port=5000 --web-hostname=0.0.0.0"]
+
+[[ports]]
+localPort = 5000
+externalPort = 5000
+
+[[ports]]
+localPort = 8000
+externalPort = 80

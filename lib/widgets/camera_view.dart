@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 
 class CameraView extends StatelessWidget {
   final CameraController controller;
-
-  const CameraView({
-    Key? key,
-    required this.controller,
-  }) : super(key: key);
+  
+  const CameraView({Key? key, required this.controller}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -19,19 +17,42 @@ class CameraView extends StatelessWidget {
         ),
       );
     }
-
-    final size = MediaQuery.of(context).size;
-    final deviceRatio = size.width / size.height;
     
-    // Calculate scale to fill the screen and maintain aspect ratio
-    final scale = 1 / (controller.value.aspectRatio * deviceRatio);
-    
-    return Transform.scale(
-      scale: scale,
-      alignment: Alignment.center,
-      child: Center(
-        child: CameraPreview(controller),
-      ),
-    );
+    // For web, we need to handle camera preview differently
+    if (kIsWeb) {
+      return Container(
+        color: Colors.black,
+        child: Center(
+          child: AspectRatio(
+            aspectRatio: controller.value.aspectRatio,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                CameraPreview(controller),
+                // Overlay for web - this helps highlight that we're in a camera view
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: Colors.blue,
+                      width: 3.0,
+                    ),
+                    borderRadius: BorderRadius.circular(12.0),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } else {
+      // For mobile platforms
+      return Transform.scale(
+        scale: 1.0,
+        child: AspectRatio(
+          aspectRatio: controller.value.aspectRatio,
+          child: CameraPreview(controller),
+        ),
+      );
+    }
   }
 }

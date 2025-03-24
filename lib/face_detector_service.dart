@@ -11,23 +11,23 @@ import 'emotion_analyzer.dart';
 import 'lighting_analyzer.dart';
 
 class FaceDetectorService {
-  late FaceDetector _faceDetector;
+  FaceDetector? _faceDetector;
   EmotionAnalyzer? _emotionAnalyzer;
   LightingAnalyzer _lightingAnalyzer = LightingAnalyzer();
   bool _isInitialized = false;
   
   Future<void> initialize() async {
-    // Initialize face detector
-    _faceDetector = GoogleMlKit.vision.faceDetector(
-      FaceDetectorOptions(
-        enableClassification: true,
-        enableLandmarks: true,
-        enableContours: true,
-        enableTracking: true,
-        minFaceSize: 0.15,
-        performanceMode: FaceDetectorMode.accurate,
-      ),
+    // Initialize face detector with options
+    final options = FaceDetectorOptions(
+      enableClassification: true,
+      enableLandmarks: true,
+      enableContours: true, 
+      enableTracking: true,
+      minFaceSize: 0.15,
+      mode: FaceDetectorMode.accurate,
     );
+    
+    _faceDetector = GoogleMlKit.vision.faceDetector(options);
     
     // Initialize emotion analyzer
     _emotionAnalyzer = await EmotionAnalyzer.create();
@@ -40,7 +40,7 @@ class FaceDetectorService {
     int sensorOrientation,
     bool isFrontCamera,
   ) async {
-    if (!_isInitialized) {
+    if (!_isInitialized || _faceDetector == null) {
       return null;
     }
     
@@ -60,19 +60,34 @@ class FaceDetectorService {
         rotation = isFrontCamera ? (sensorOrientation + 90) % 360 : (sensorOrientation + 270) % 360;
       } else if (Platform.isIOS) {
         rotation = isFrontCamera ? (sensorOrientation + 90) % 360 : (sensorOrientation + 90) % 360;
+      } else {
+        // For web or other platforms
+        rotation = 0;
       }
       
-      final InputImageRotation imageRotation = InputImageRotation.values.firstWhere(
-        (element) => element.rawValue == rotation
-      );
+      // Convert rotation to InputImageRotation
+      final InputImageRotation imageRotation = rotation == 0
+          ? InputImageRotation.rotation0deg
+          : rotation == 90
+              ? InputImageRotation.rotation90deg
+              : rotation == 180
+                  ? InputImageRotation.rotation180deg
+                  : InputImageRotation.rotation270deg;
       
+      // Create InputImage
       final InputImage inputImage = InputImage.fromBytes(
         bytes: bytes,
-        metadata: InputImageMetadata(
+        inputImageData: InputImageData(
           size: imageSize,
-          rotation: imageRotation, 
-          format: InputImageFormat.yuv420, 
-          bytesPerRow: image.planes[0].bytesPerRow,
+          imageRotation: imageRotation,
+          inputImageFormat: InputImageFormat.yuv420,
+          planeData: image.planes.map((plane) {
+            return InputImagePlaneMetadata(
+              bytesPerRow: plane.bytesPerRow,
+              height: image.height,
+              width: image.width,
+            );
+          }).toList(),
         ),
       );
       
@@ -125,7 +140,7 @@ class FaceDetectorService {
     final uvRowStride = cameraImage.planes[1].bytesPerRow;
     final uvPixelStride = cameraImage.planes[1].bytesPerPixel!;
     
-    final image = img.Image(width, height);
+    final image = img.Image.rgb(width, height);
     
     for (int h = 0; h < height; h++) {
       int uvh = (h / 2).floor();
@@ -183,7 +198,7 @@ class FaceDetectorService {
   }
   
   void dispose() {
-    _faceDetector.close();
+    _faceDetector?.close();
     _emotionAnalyzer?.dispose();
   }
 }

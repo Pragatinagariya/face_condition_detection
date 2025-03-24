@@ -1,214 +1,289 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
 import 'package:camera/camera.dart';
+import 'package:google_ml_kit/google_ml_kit.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'dart:async';
-
-import 'face_detector_service.dart';
-import 'models/face_data.dart';
-import 'widgets/camera_view.dart';
-import 'widgets/analysis_overlay.dart';
+import 'package:face_condition_detector/models/facial_condition.dart';
+import 'package:face_condition_detector/widgets/camera_view.dart';
+import 'package:face_condition_detector/widgets/face_overlay.dart';
+import 'package:face_condition_detector/widgets/condition_display.dart';
+import 'package:face_condition_detector/services/face_detector_service.dart';
+import 'package:face_condition_detector/utils/lighting_analyzer.dart';
+import 'package:flutter/foundation.dart';
 
 class CameraPage extends StatefulWidget {
-  const CameraPage({Key? key}) : super(key: key);
+  final List<CameraDescription> cameras;
+  
+  const CameraPage({Key? key, required this.cameras}) : super(key: key);
 
   @override
   _CameraPageState createState() => _CameraPageState();
 }
 
-class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
-  CameraController? _cameraController;
-  List<CameraDescription>? _cameras;
-  FaceDetectorService? _faceDetectorService;
-  bool _isProcessing = false;
-  bool _isCameraInitialized = false;
-  bool _isFrontCamera = true;
-  int _cameraIndex = 0;
-
+class _CameraPageState extends State<CameraPage> {
+  CameraController? cameraController;
+  FaceDetectorService? faceDetectorService;
+  LightingAnalyzer? lightingAnalyzer;
+  
+  // Current state variables
+  bool _faceDetected = false;
+  FacialCondition? _currentCondition;
+  String _lightingCondition = "Normal";
+  List<Face>? _faces;
+  MockFace? _mockFace;
+  bool _useMockFace = false; // For web or when ML Kit fails
+  
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _initializeCamera();
+    _requestCameraPermission();
+    _initServices();
   }
-
+  
+  Future<void> _requestCameraPermission() async {
+    final status = await Permission.camera.request();
+    if (status != PermissionStatus.granted) {
+      // Handle permission denied
+      print('Camera permission denied');
+    }
+  }
+  
+  void _initServices() {
+    // Initialize face detector
+    faceDetectorService = FaceDetectorService();
+    
+    // Initialize lighting analyzer
+    lightingAnalyzer = LightingAnalyzer();
+    
+    // Initialize camera with front camera if available
+    final frontCamera = widget.cameras.firstWhere(
+      (camera) => camera.lensDirection == CameraLensDirection.front,
+      orElse: () => widget.cameras.first,
+    );
+    
+    cameraController = CameraController(
+      frontCamera,
+      ResolutionPreset.medium,
+      enableAudio: false,
+    );
+    
+    cameraController!.initialize().then((_) {
+      if (!mounted) return;
+      setState(() {});
+      
+      // Start the image stream
+      cameraController!.startImageStream(_processImage);
+    }).catchError((e) {
+      print('Error initializing camera: $e');
+    });
+  }
+  
+  void _processImage(CameraImage image) async {
+    if (mounted) {
+      // Process lighting
+      final lighting = await lightingAnalyzer!.analyzeLighting(image);
+      
+      // Process face detection using ML Kit
+      final faces = await faceDetectorService!.detectFaces(image, cameraController!.description);
+      
+      // If ML Kit cannot process the image (web, compatibility issues), use mock detection
+      _useMockFace = kIsWeb || (faces == null || faces.isEmpty);
+      
+      // Process emotion when face is detected
+      FacialCondition? condition;
+      bool faceDetected = false;
+      
+      if (!_useMockFace && faces != null && faces.isNotEmpty) {
+        // Real ML Kit detection worked
+        condition = await faceDetectorService!.detectEmotion(faces.first);
+        faceDetected = true;
+      } else {
+        // Use mock face detection for web or fallback
+        final mockFace = await faceDetectorService!.getSimulatedFace(image);
+        if (mockFace != null) {
+          condition = await faceDetectorService!.detectEmotionForMock(mockFace);
+          faceDetected = true;
+          _mockFace = mockFace;
+        }
+      }
+      
+      setState(() {
+        _faces = faces;
+        _faceDetected = faceDetected;
+        _currentCondition = condition;
+        _lightingCondition = lighting;
+      });
+    }
+  }
+  
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _cameraController?.dispose();
-    _faceDetectorService?.dispose();
+    cameraController?.dispose();
+    faceDetectorService?.dispose();
     super.dispose();
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    final CameraController? cameraController = _cameraController;
-
-    // App state changed before camera was initialized
-    if (cameraController == null || !cameraController.value.isInitialized) {
-      return;
-    }
-
-    if (state == AppLifecycleState.inactive) {
-      cameraController.dispose();
-    } else if (state == AppLifecycleState.resumed) {
-      _initializeCamera();
-    }
-  }
-
-  Future<void> _requestCameraPermission() async {
-    final status = await Permission.camera.request();
-    if (status != PermissionStatus.granted) {
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Camera Permission'),
-            content: const Text('Camera permission is required to use this app.'),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(ctx).pop();
-                  _requestCameraPermission();
-                },
-                child: const Text('Try Again'),
-              ),
-              TextButton(
-                onPressed: () => openAppSettings(),
-                child: const Text('Open Settings'),
-              ),
-            ],
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _initializeCamera() async {
-    await _requestCameraPermission();
-    
-    try {
-      _cameras = await availableCameras();
-      
-      // Find front camera
-      _cameraIndex = _cameras!.indexWhere(
-        (camera) => camera.lensDirection == CameraLensDirection.front
-      );
-      
-      // If front camera not found, use the first camera
-      if (_cameraIndex == -1) {
-        _cameraIndex = 0;
-        _isFrontCamera = false;
-      }
-
-      await _setupCamera(_cameraIndex);
-      
-      // Initialize face detector after camera setup
-      _faceDetectorService = FaceDetectorService();
-      await _faceDetectorService!.initialize();
-      
-      if (mounted) {
-        setState(() {
-          _isCameraInitialized = true;
-        });
-      }
-    } on CameraException catch (e) {
-      debugPrint('Camera initialization error: ${e.code}: ${e.description}');
-    } catch (e) {
-      debugPrint('Camera initialization error: $e');
-    }
-  }
-
-  Future<void> _setupCamera(int cameraIndex) async {
-    if (_cameraController != null) {
-      await _cameraController!.dispose();
-    }
-
-    if (_cameras == null || _cameras!.isEmpty) {
-      return;
-    }
-
-    final camera = _cameras![cameraIndex];
-    _cameraController = CameraController(
-      camera,
-      ResolutionPreset.medium,
-      enableAudio: false,
-      imageFormatGroup: ImageFormatGroup.yuv420,
-    );
-
-    await _cameraController!.initialize();
-    
-    _cameraController!.startImageStream(_processCameraImage);
-  }
-
-  void _processCameraImage(CameraImage image) {
-    if (_isProcessing || !mounted) {
-      return;
-    }
-
-    _isProcessing = true;
-
-    _faceDetectorService?.processImage(
-      image, 
-      _cameraController!.description.sensorOrientation,
-      _isFrontCamera
-    ).then((faceData) {
-      if (mounted && faceData != null) {
-        Provider.of<FaceDataModel>(context, listen: false).updateFaceData(faceData);
-      }
-      _isProcessing = false;
-    }).catchError((error) {
-      debugPrint('Error processing image: $error');
-      _isProcessing = false;
-    });
-  }
-
-  Future<void> _toggleCamera() async {
-    if (_cameras == null || _cameras!.length <= 1 || _cameraController == null) {
-      return;
-    }
-
-    // Toggle camera index
-    _cameraIndex = (_cameraIndex + 1) % _cameras!.length;
-    _isFrontCamera = _cameras![_cameraIndex].lensDirection == CameraLensDirection.front;
-
-    // Setup new camera
-    await _setupCamera(_cameraIndex);
-    
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
+    if (cameraController == null || !cameraController!.value.isInitialized) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    
     return Scaffold(
-      body: Stack(
+      appBar: AppBar(
+        title: const Text('Face Condition Detector'),
+      ),
+      body: Column(
         children: [
-          if (!_isCameraInitialized)
-            const Center(
-              child: CircularProgressIndicator(),
-            )
-          else ...[
-            // Camera preview
-            CameraView(controller: _cameraController!),
-            
-            // Face analysis overlay
-            const AnalysisOverlay(),
-            
-            // Camera controls
-            Positioned(
-              bottom: 20,
-              right: 20,
-              child: FloatingActionButton(
-                onPressed: _toggleCamera,
-                child: const Icon(Icons.flip_camera_ios),
-              ),
+          Expanded(
+            flex: 3,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Camera View
+                CameraView(controller: cameraController!),
+                
+                // Face Overlay - for real ML Kit detection
+                if (_faceDetected && !_useMockFace && _faces != null && _faces!.isNotEmpty)
+                  FaceOverlay(
+                    faces: _faces!,
+                    previewSize: cameraController!.value.previewSize!,
+                    screenSize: MediaQuery.of(context).size,
+                  ),
+                  
+                // Mock Face Overlay - for web or fallback
+                if (_faceDetected && _useMockFace && _mockFace != null)
+                  CustomPaint(
+                    painter: MockFaceOverlayPainter(
+                      mockFace: _mockFace!,
+                      previewSize: cameraController!.value.previewSize!,
+                      screenSize: MediaQuery.of(context).size,
+                    ),
+                  ),
+              ],
             ),
-          ],
+          ),
+          
+          // Condition Display
+          Expanded(
+            flex: 1,
+            child: ConditionDisplay(
+              facialCondition: _currentCondition,
+              lightingCondition: _lightingCondition,
+              faceDetected: _faceDetected,
+            ),
+          ),
         ],
       ),
     );
+  }
+}
+
+// A painter for drawing mock faces
+class MockFaceOverlayPainter extends CustomPainter {
+  final MockFace mockFace;
+  final Size previewSize;
+  final Size screenSize;
+  
+  MockFaceOverlayPainter({
+    required this.mockFace,
+    required this.previewSize,
+    required this.screenSize,
+  });
+  
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Paint settings for the face boundaries
+    final Paint paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.0
+      ..color = Colors.orange; // Different color to indicate mock detection
+    
+    // Paint settings for the facial landmarks
+    final Paint landmarkPaint = Paint()
+      ..style = PaintingStyle.fill
+      ..color = Colors.yellow
+      ..strokeWidth = 3.0;
+    
+    // Calculate scale factors to map the face coordinates
+    final double scaleX = size.width / previewSize.height;
+    final double scaleY = size.height / previewSize.width;
+    
+    // Draw face boundary
+    final double left = mockFace.boundingBox.left * scaleX;
+    final double top = mockFace.boundingBox.top * scaleY;
+    final double right = mockFace.boundingBox.right * scaleX;
+    final double bottom = mockFace.boundingBox.bottom * scaleY;
+    
+    // Draw the face rectangle
+    canvas.drawRect(
+      Rect.fromLTRB(left, top, right, bottom),
+      paint,
+    );
+    
+    // Draw key facial points
+    if (mockFace.leftEyeOpenProbability != null) {
+      // Draw a circle for left eye
+      canvas.drawCircle(
+        Offset(
+          (left + right) / 4, // Approximate left eye position
+          (top + top + bottom) / 3,
+        ),
+        5.0,
+        landmarkPaint,
+      );
+      
+      // Draw a circle for right eye
+      canvas.drawCircle(
+        Offset(
+          (left + right) * 3 / 4, // Approximate right eye position
+          (top + top + bottom) / 3,
+        ),
+        5.0,
+        landmarkPaint,
+      );
+      
+      // Draw a circle for nose
+      canvas.drawCircle(
+        Offset(
+          (left + right) / 2, // Approximate nose position
+          (top + bottom) / 2,
+        ),
+        5.0,
+        landmarkPaint,
+      );
+      
+      // Draw a circle for mouth
+      canvas.drawCircle(
+        Offset(
+          (left + right) / 2, // Approximate mouth position
+          (top + bottom) * 2 / 3,
+        ),
+        5.0,
+        landmarkPaint,
+      );
+    }
+    
+    // Write the confidence score using smiling probability
+    final TextPainter textPainter = TextPainter(
+      text: TextSpan(
+        text: 'Web Demo${kIsWeb ? " (Web Browser)" : " (Fallback Mode)"}',
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 14,
+          backgroundColor: Colors.black54,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+    
+    textPainter.layout();
+    textPainter.paint(canvas, Offset(left, top - 20));
+  }
+  
+  @override
+  bool shouldRepaint(MockFaceOverlayPainter oldDelegate) {
+    return oldDelegate.mockFace != mockFace;
   }
 }
