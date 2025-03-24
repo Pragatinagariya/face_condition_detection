@@ -186,4 +186,52 @@ class ConditionDisplay extends StatelessWidget {
         return Colors.green;
     }
   }
+  
+  IconData _getEmotionIcon(EmotionType emotion) {
+    switch (emotion) {
+      case EmotionType.happy:
+        return Icons.sentiment_very_satisfied;
+      case EmotionType.sad:
+        return Icons.sentiment_very_dissatisfied;
+      case EmotionType.angry:
+        return Icons.sentiment_very_dissatisfied;
+      case EmotionType.surprised:
+        return Icons.sentiment_satisfied_alt;
+      case EmotionType.fearful:
+        return Icons.sentiment_dissatisfied;
+      case EmotionType.disgusted:
+        return Icons.sick;
+      case EmotionType.tired:
+        return Icons.nights_stay;
+      case EmotionType.stressed:
+        return Icons.psychology;
+      case EmotionType.neutral:
+      default:
+        return Icons.sentiment_neutral;
+    }
+  }
+  
+  Color _getEmotionColor(EmotionType emotion) {
+    switch (emotion) {
+      case EmotionType.happy:
+        return Colors.green;
+      case EmotionType.sad:
+        return Colors.blue;
+      case EmotionType.angry:
+        return Colors.red;
+      case EmotionType.surprised:
+        return Colors.purple;
+      case EmotionType.fearful:
+        return Colors.orange;
+      case EmotionType.disgusted:
+        return Colors.brown;
+      case EmotionType.tired:
+        return Colors.indigo;
+      case EmotionType.stressed:
+        return Colors.deepOrange;
+      case EmotionType.neutral:
+      default:
+        return Colors.grey;
+    }
+  }
 }
