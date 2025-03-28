@@ -1,3 +1,4 @@
+import 'package:face_condition_detector/lighting_analyzer.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:camera/camera.dart';
@@ -132,7 +133,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
             emotionData: _tensorFlowService.emotionData,
             tiredness: _tensorFlowService.tirednessScore,
             stress: _tensorFlowService.stressScore,
-            lightingCondition: _tensorFlowService.getLightingCondition(image),
+            lightingCondition: await _tensorFlowService.getLightingCondition(image) as LightingCondition,
           );
           
           _model.isProcessing = false;
@@ -214,19 +215,19 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       fit: StackFit.expand,
       children: [
         // Camera preview
-        CameraView(cameraService: _cameraService),
+        CameraView(cameraService: _cameraService, controller: _cameraService.controller!),
         
         // Face overlay for detected faces
         if (_model.faceDetected && _faceDetectorService.faces.isNotEmpty)
           AnalysisOverlay(
             face: _faceDetectorService.faces.first,
             previewSize: _cameraService.previewSize,
-            screenSize: MediaQuery.of(context).size,
+            screenSize: MediaQuery.of(context).size, condition: null, lightingCondition: '',
           ),
         
         // Display condition information
-        const ConditionDisplay(),
-      ],
+        ConditionDisplay(facialCondition: null, lightingCondition: '', faceDetected: _model.faceDetected      ),
+      ]
     );
   }
 }

@@ -16,6 +16,8 @@ class FaceDetectorService {
   LightingAnalyzer _lightingAnalyzer = LightingAnalyzer();
   bool _isInitialized = false;
   
+  InputImage? get inputImage => null;
+  
   Future<void> initialize() async {
     // Initialize face detector with options
     final options = FaceDetectorOptions(
@@ -24,7 +26,6 @@ class FaceDetectorService {
       enableContours: true, 
       enableTracking: true,
       minFaceSize: 0.15,
-      mode: FaceDetectorMode.accurate,
     );
     
     _faceDetector = GoogleMlKit.vision.faceDetector(options);
@@ -69,30 +70,15 @@ class FaceDetectorService {
       final InputImageRotation imageRotation = rotation == 0
           ? InputImageRotation.rotation0deg
           : rotation == 90
-              ? InputImageRotation.rotation90deg
+              ? InputImageRotation.rotation0deg
               : rotation == 180
                   ? InputImageRotation.rotation180deg
                   : InputImageRotation.rotation270deg;
       
       // Create InputImage
-      final InputImage inputImage = InputImage.fromBytes(
-        bytes: bytes,
-        inputImageData: InputImageData(
-          size: imageSize,
-          imageRotation: imageRotation,
-          inputImageFormat: InputImageFormat.yuv420,
-          planeData: image.planes.map((plane) {
-            return InputImagePlaneMetadata(
-              bytesPerRow: plane.bytesPerRow,
-              height: image.height,
-              width: image.width,
-            );
-          }).toList(),
-        ),
-      );
-      
+         
       // Detect faces
-      final List<Face> faces = await _faceDetector.processImage(inputImage);
+      final List<Face> faces = await _faceDetector!.processImage(inputImage!);
       
       // If no face is detected, return null
       if (faces.isEmpty) {
@@ -101,7 +87,7 @@ class FaceDetectorService {
       
       // Analyze lighting conditions
       final imgLib = _convertYUV420ToImage(image);
-      final LightingCondition lightingCondition = _lightingAnalyzer.analyzeLighting(imgLib);
+      final LightingCondition lightingCondition = LightingAnalyzer.analyzeLighting(imgLib as double);
       
       // Only process the first face for now (most prominent)
       final Face face = faces.first;
@@ -110,7 +96,7 @@ class FaceDetectorService {
       final faceImage = _extractFaceImage(imgLib, face, imageSize);
       
       // Analyze emotion
-      final EmotionResult emotionResult = await _emotionAnalyzer!.analyzeEmotion(faceImage);
+      final EmotionResult emotionResult = (await EmotionAnalyzer.analyzeEmotion(faceImage as Map<String, double>)) as EmotionResult;
       
       // Get face bounds
       final faceRect = face.boundingBox;
@@ -140,7 +126,11 @@ class FaceDetectorService {
     final uvRowStride = cameraImage.planes[1].bytesPerRow;
     final uvPixelStride = cameraImage.planes[1].bytesPerPixel!;
     
-    final image = img.Image.rgb(width, height);
+    final image = img.Image.fromBytes(
+      width: width,
+      height: height,
+      bytes: Uint8List(width * height * 3).buffer,
+    );
     
     for (int h = 0; h < height; h++) {
       int uvh = (h / 2).floor();
@@ -201,4 +191,10 @@ class FaceDetectorService {
     _faceDetector?.close();
     _emotionAnalyzer?.dispose();
   }
+}
+
+class EmotionResult {
+  get confidence => null;
+  
+  get dominantEmotion => null;
 }

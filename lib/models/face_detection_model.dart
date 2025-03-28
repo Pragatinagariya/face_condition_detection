@@ -1,3 +1,4 @@
+import 'package:face_condition_detector/lighting_analyzer.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_ml_kit/google_ml_kit.dart';
 import 'facial_condition.dart';
@@ -53,7 +54,7 @@ class FaceDetectionModel extends ChangeNotifier {
       tiredness: tiredness,
       stress: stress,
       lightingCondition: lightingCondition,
-      timestamp: DateTime.now(),
+      timestamp: DateTime.now(), confidence: 0.0,
     );
 
     notifyListeners();

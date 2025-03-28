@@ -1,3 +1,4 @@
+import 'package:face_condition_detector/services/camera_service.dart';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
@@ -5,7 +6,7 @@ import 'package:flutter/foundation.dart';
 class CameraView extends StatelessWidget {
   final CameraController controller;
   
-  const CameraView({Key? key, required this.controller}) : super(key: key);
+  const CameraView({Key? key, required this.controller, required CameraService cameraService}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {

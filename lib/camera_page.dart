@@ -1,3 +1,5 @@
+import 'package:face_condition_detector/lighting_analyzer.dart' as detector_lighting;
+import 'package:face_condition_detector/services/camera_service.dart';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:google_ml_kit/google_ml_kit.dart';
@@ -52,7 +54,7 @@ class _CameraPageState extends State<CameraPage> {
     faceDetectorService = FaceDetectorService();
     
     // Initialize lighting analyzer
-    lightingAnalyzer = LightingAnalyzer();
+    lightingAnalyzer = detector_lighting.LightingAnalyzer() as LightingAnalyzer?;
     
     // Initialize camera with front camera if available
     final frontCamera = widget.cameras.firstWhere(
@@ -130,13 +132,15 @@ class _CameraPageState extends State<CameraPage> {
               condition = FacialCondition(
                 emotion: EmotionType.tired,
                 confidence: 0.6, // Moderate confidence in tiredness detection
-                lightingQuality: lightingQualityValue,
+                lightingQuality: lightingQualityValue, stress: 0.0, emotionConfidence: 0.0, tiredness: 0.0, faceId: 0,
+                 lightingCondition: detector_lighting.LightingCondition.normal, timestamp: DateTime.now(),
               );
             } else {
               condition = FacialCondition(
                 emotion: condition.emotion,
                 confidence: adjustedConfidence,
-                lightingQuality: lightingQualityValue,
+                lightingQuality: lightingQualityValue, stress: 0.0, tiredness: 0.0, emotionConfidence: 0.0, faceId: 0,
+                 lightingCondition: detector_lighting.LightingCondition.normal, timestamp: DateTime.now(),
               );
             }
           }
@@ -182,7 +186,7 @@ class _CameraPageState extends State<CameraPage> {
               fit: StackFit.expand,
               children: [
                 // Camera View
-                CameraView(controller: cameraController!),
+                CameraView(controller: cameraController!, cameraService: CameraService(camera: cameraController!.description),),
                 
                 // Face Overlay - for real ML Kit detection
                 if (_faceDetected && !_useMockFace && _faces != null && _faces!.isNotEmpty)

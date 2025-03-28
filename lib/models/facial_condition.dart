@@ -1,3 +1,5 @@
+import 'package:face_condition_detector/lighting_analyzer.dart';
+
 enum EmotionType {
   happy,
   sad,
@@ -18,7 +20,7 @@ class FacialCondition {
   FacialCondition({
     required this.emotion,
     required this.confidence,
-    this.lightingQuality = 0.9, // Default to good lighting
+    this.lightingQuality = 0.9, required double stress, required double tiredness, required double emotionConfidence, required int faceId, required LightingCondition lightingCondition, required DateTime timestamp, // Default to good lighting
   });
   
   String get emotionName {

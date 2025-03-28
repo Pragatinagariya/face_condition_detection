@@ -8,7 +8,7 @@ class AnalysisOverlay extends StatelessWidget {
   const AnalysisOverlay({
     Key? key,
     required this.condition,
-    required this.lightingCondition,
+    required this.lightingCondition, required face, required Size previewSize, required Size screenSize,
   }) : super(key: key);
 
   @override
@@ -53,13 +53,13 @@ class AnalysisOverlay extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    _getEmotionIcon(condition.emotion),
+                    _getEmotionIcon(condition?.emotion ?? EmotionType.neutral),
                     color: Colors.white,
                     size: 16,
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    condition.emotionName,
+                    condition?.emotionName ?? 'Unknown',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 12,

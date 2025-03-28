@@ -115,4 +115,8 @@ class EmotionAnalyzer {
         return '❓';
     }
   }
+
+  static create() {}
+
+  void dispose() {}
 }

@@ -1,4 +1,5 @@
 import 'package:camera/camera.dart';
+import 'package:face_condition_detector/lighting_analyzer.dart' as detector_lighting;
 import 'package:google_ml_kit/google_ml_kit.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -34,11 +35,12 @@ class FaceDetectorService {
             enableClassification: true, // For smile detection
             enableContours: true,       // For facial contours
             enableLandmarks: true,      // For facial landmarks 
-            mode: FaceDetectorMode.accurate,
           ),
         ) {
     _initTensorFlow();
   }
+
+  get faces => null;
   
   Future<void> _initTensorFlow() async {
     try {
@@ -120,6 +122,8 @@ class FaceDetectorService {
             emotion: EmotionType.happy,
             confidence: face.smilingProbability ?? 0.8,
             lightingQuality: lightingQuality,
+            stress: 0.0, emotionConfidence: 0.0, faceId: 0, tiredness: 0.0, 
+           lightingCondition: detector_lighting.LightingCondition.normal, timestamp: DateTime.now(),
           );
         }
         
@@ -140,6 +144,8 @@ class FaceDetectorService {
             emotion: EmotionType.tired,
             confidence: 0.7 + (0.3 - eyeOpenness), // More closed = higher confidence
             lightingQuality: lightingQuality,
+            stress: 0.0, emotionConfidence: 0.0, faceId: 0, tiredness: 0.0, 
+           lightingCondition: detector_lighting.LightingCondition.normal, timestamp: DateTime.now(),
           );
         }
         
@@ -147,6 +153,8 @@ class FaceDetectorService {
           emotion: dominantEmotion,
           confidence: confidence,
           lightingQuality: lightingQuality,
+          stress: 0.0, emotionConfidence: 0.0, faceId: 0, tiredness: 0.0, 
+           lightingCondition: detector_lighting.LightingCondition.normal, timestamp: DateTime.now(),
         );
       } else {
         // Fallback to basic detection
@@ -183,6 +191,8 @@ class FaceDetectorService {
       emotion: randomEmotion,
       confidence: confidence,
       lightingQuality: lightingQuality,
+      stress: 0.0, emotionConfidence: 0.0, faceId: 0, tiredness: 0.0, 
+           lightingCondition: detector_lighting.LightingCondition.normal, timestamp: DateTime.now(),
     );
   }
   
@@ -197,6 +207,8 @@ class FaceDetectorService {
           emotion: EmotionType.happy,
           confidence: face.smilingProbability ?? 0.8,
           lightingQuality: lightingQuality,
+          stress: 0.0, emotionConfidence: 0.0, faceId: 0, tiredness: 0.0, 
+           lightingCondition: detector_lighting.LightingCondition.normal, timestamp: DateTime.now(),
         );
       }
       
@@ -215,14 +227,16 @@ class FaceDetectorService {
           return FacialCondition(
             emotion: EmotionType.tired,
             confidence: 0.7 + (0.3 - eyeOpenness), // More closed = higher confidence
-            lightingQuality: lightingQuality,
+            lightingQuality: lightingQuality, stress: 0.0, emotionConfidence: 0.0, faceId: 0, tiredness: 0.0, 
+           lightingCondition: detector_lighting.LightingCondition.normal, timestamp: DateTime.now(),
           );
         }
         
         return FacialCondition(
           emotion: dominantEmotion,
           confidence: confidence,
-          lightingQuality: lightingQuality,
+          lightingQuality: lightingQuality,stress: 0.0, emotionConfidence: 0.0, faceId: 0, tiredness: 0.0, 
+           lightingCondition: detector_lighting.LightingCondition.normal, timestamp: DateTime.now(),
         );
       } else {
         return _fallbackEmotionDetection(lightingQuality);
@@ -237,4 +251,8 @@ class FaceDetectorService {
     _faceDetector.close();
     _tensorFlowService.dispose();
   }
+
+  processImage(CameraImage image, CameraDescription cameraDescription) {}
+
+  initialize() {}
 }
